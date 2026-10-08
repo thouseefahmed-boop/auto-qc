@@ -1,9 +1,18 @@
 const requestedCategory = new URLSearchParams(location.search).get('category');
+const dedicatedCategory = new URLSearchParams(location.search).get('dedicated');
 const validCategories = ['bad_product', 'bad_movement', 'nudity'];
 const state = { category: validCategories.includes(requestedCategory) ? requestedCategory : 'bad_product', status: 'all', items: [], index: 0, counts: {}, remoteTotal: 0 };
 const $ = id => document.getElementById(id);
 const filters = ['all', 'unreviewed', 'approved', 'rejected'];
 const esc = value => String(value || '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+if (validCategories.includes(dedicatedCategory)) {
+  document.title = `${dedicatedCategory.replaceAll('_', ' ')} review`;
+  const tabs = document.querySelector('.tabs');
+  if (tabs) tabs.hidden = true;
+  const heading = document.querySelector('h1');
+  if (heading) heading.textContent = dedicatedCategory.replaceAll('_', ' ').toUpperCase();
+}
 
 function renderFilters() {
   $('filters').innerHTML = filters.map(name => `<button class="${state.status === name ? 'active' : ''}" data-status="${name}">${name} · ${state.counts[name] || 0}</button>`).join('');

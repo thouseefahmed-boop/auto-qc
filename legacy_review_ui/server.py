@@ -20,11 +20,11 @@ from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parent
-EXPORT_ROOT = ROOT.parent
-WEB_ROOT = ROOT / "web"
-REVIEWS_PATH = ROOT / "reviews.json"
-IMAGE_MAP_PATH = ROOT / "product_images.json"
-THUMBNAIL_DB_PATH = ROOT / "thumbnail_issues.sqlite3"
+EXPORT_ROOT = Path(os.environ.get("REVIEW_EXPORT_ROOT", str(ROOT.parent)))
+WEB_ROOT = Path(os.environ.get("REVIEW_WEB_ROOT", str(ROOT / "web")))
+REVIEWS_PATH = Path(os.environ.get("REVIEW_REVIEWS_PATH", str(ROOT / "reviews.json")))
+IMAGE_MAP_PATH = Path(os.environ.get("REVIEW_IMAGE_MAP_PATH", str(ROOT / "product_images.json")))
+THUMBNAIL_DB_PATH = Path(os.environ.get("REVIEW_THUMBNAIL_DB_PATH", str(ROOT / "thumbnail_issues.sqlite3")))
 ARTIFACTS_BASE = "http://rtx-1.dev.internal:8090/artifacts-service"
 THUMBNAIL_WORKFLOWS = {"Zeus-Lightning-lifestyle", "Zeus-Lightning-lifestyle-2"}
 LOCK = threading.Lock()
@@ -43,10 +43,14 @@ DATASETS = {
         ],
     },
     "bad_movement": {
-        # A fresh, apparel-only pool of incorrect-product generations. These are
-        # movement *candidates* for manual confirmation; ordinary camera edits
-        # must not be treated as movement failures.
+        # Latest human-reviewed BAD_MOVEMENT videos from qc_review come first.
+        # The older screening CSV remains below as a supplemental candidate
+        # pool; every item still requires an explicit UI decision.
         "sources": [
+            (
+                EXPORT_ROOT / "qc_bad_movement.csv",
+                EXPORT_ROOT / "qc_bad_movement",
+            ),
             (
                 EXPORT_ROOT / "movement_screening_apparel_500.csv",
                 EXPORT_ROOT / "movement_screening_apparel_500",
@@ -60,6 +64,10 @@ DATASETS = {
         )],
     },
 }
+
+_ONLY_CATEGORY = os.environ.get("REVIEW_ONLY_CATEGORY", "").strip()
+if _ONLY_CATEGORY in DATASETS:
+    DATASETS = {_ONLY_CATEGORY: DATASETS[_ONLY_CATEGORY]}
 
 
 def load_json(path: Path, default):
@@ -89,6 +97,7 @@ def locate_video(media_dir: Path, identifier: str) -> Path | None:
 def build_items() -> list[dict]:
     image_map = load_json(IMAGE_MAP_PATH, {})
     items = []
+    seen = set()
     for category, config in DATASETS.items():
         position = 0
         for source_index, (csv_path, media_dir) in enumerate(config["sources"]):
@@ -99,12 +108,18 @@ def build_items() -> list[dict]:
             for row in rows:
                 position += 1
                 identifier = artifact_id(row)
+                item_key = f"{category}:{identifier}"
+                if not identifier or item_key in seen:
+                    continue
+                seen.add(item_key)
                 video = locate_video(media_dir, identifier)
                 product_key = row.get("product_id", "")
                 image = image_map.get(product_key, {}) if category != "nudity" else {}
                 reference_urls = image.get("source_urls") or image.get("image_urls") or []
                 if not isinstance(reference_urls, list):
                     reference_urls = [image.get("source_url")] if image.get("source_url") else []
+                if not reference_urls and row.get("image_url"):
+                    reference_urls = [row["image_url"]]
                 reference_urls = list(dict.fromkeys(
                     url for url in reference_urls
                     if isinstance(url, str) and url.startswith(("http://", "https://"))
@@ -141,7 +156,10 @@ def build_items() -> list[dict]:
                     "exposure_flags": exposure_flags,
                     "reviewed_at": row.get("reviewed_at", "") or row.get("qc_updated_at", ""),
                     "video_available": bool(video) or bool(re.fullmatch(r"[0-9a-fA-F-]{36}", identifier)),
-                    "video_url": f"/media/{category}/{source_index}/{quote(video.name)}" if video else (f"/s3/{quote(identifier)}" if re.fullmatch(r"[0-9a-fA-F-]{36}", identifier) else ""),
+                    # QC-review exports can carry the artifact-service URL directly.
+                    # This is needed for older QC artifacts that are not present in
+                    # the newer /artifacts-service registry used by /s3/.
+                    "video_url": row.get("video_url") or (f"/media/{category}/{source_index}/{quote(video.name)}" if video else (f"/s3/{quote(identifier)}" if re.fullmatch(r"[0-9a-fA-F-]{36}", identifier) else "")),
                     "image_url": reference_urls[0] if reference_urls else image.get("source_url", ""),
                     "image_urls": reference_urls,
                     "image_role": image.get("role", ""),
@@ -231,7 +249,9 @@ class ReviewHandler(SimpleHTTPRequestHandler):
 
     def get_items(self, query):
         category = query.get("category", ["bad_product"])[0]
-        if category in {"bad_product", "bad_movement"} and THUMBNAIL_DB_PATH.exists():
+        if (category in {"bad_product", "bad_movement"}
+                and THUMBNAIL_DB_PATH.exists()
+                and os.environ.get("REVIEW_DISABLE_BULK_DB", "") != "1"):
             return self.get_merged_items(query)
         status = query.get("status", ["all"])[0]
         search = query.get("search", [""])[0].strip().lower()
@@ -254,7 +274,16 @@ class ReviewHandler(SimpleHTTPRequestHandler):
             if item["category"] == category:
                 counts["all"] += 1
                 counts[reviews.get(item["id"], {}).get("decision", "unreviewed")] += 1
-        self.json_response({"items": items, "counts": counts})
+        # Dedicated queues do not use the legacy SQLite bulk pool, but the
+        # frontend still expects a one-item page and a total for keyboard
+        # navigation.  Filter first, then return only the requested position.
+        try:
+            index = max(0, int(query.get("index", ["0"])[0]))
+        except ValueError:
+            return self.json_response({"error": "Invalid index"}, HTTPStatus.BAD_REQUEST)
+        total = len(items)
+        page = items[index:index + 1] if category in {"bad_product", "bad_movement"} else items
+        self.json_response({"items": page, "counts": counts, "total": total})
 
     def get_merged_items(self, query):
         category = query.get("category", ["bad_product"])[0]
