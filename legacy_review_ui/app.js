@@ -138,7 +138,9 @@ function toast(message) { $('toast').textContent = message; $('toast').classList
 document.querySelectorAll('[data-category]').forEach(button => button.onclick = () => {
   document.querySelector('.tab.active').classList.remove('active'); button.classList.add('active');
   state.category = button.dataset.category; state.status = 'all'; state.index = 0; load();
-  history.replaceState(null, '', `?category=${state.category}`);
+  const nextQuery = new URLSearchParams({ category: state.category });
+  if (severityMode) nextQuery.set('severity', '1');
+  history.replaceState(null, '', `?${nextQuery}`);
 });
 $('previous').onclick = () => changePage(-1); $('next').onclick = () => changePage(1);
 let searchTimer; $('search').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.index = 0; load(); }, 220); };
