@@ -1,0 +1,17 @@
+[Unit]
+Description=AutoQC dedicated PostgreSQL (user-owned)
+After=network.target
+
+[Service]
+Type=simple
+Environment=LD_LIBRARY_PATH=%h/autoqc/runtime/pg/usr/lib/x86_64-linux-gnu
+ExecStart=%h/autoqc/runtime/pg/usr/lib/postgresql/16/bin/postgres -D %h/autoqc/data/postgres -p 55432 -h 127.0.0.1 -k %h/autoqc/runtime
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=90
+UMask=0077
+
+[Install]
+WantedBy=default.target
+

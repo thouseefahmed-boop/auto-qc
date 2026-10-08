@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: autoqc
+      POSTGRES_DB: autoqc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a private POSTGRES_PASSWORD}
+    ports: ["127.0.0.1:55432:5432"]
+    volumes: ["autoqc_pg:/var/lib/postgresql/data"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U autoqc -d autoqc"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://autoqc:${POSTGRES_PASSWORD}@db:5432/autoqc
+      AUTOQC_WORKER_TOKEN: ${AUTOQC_WORKER_TOKEN:?Set a private worker token}
+      ARTIFACTS_BASE: ${ARTIFACTS_BASE:-http://rtx-1.dev.internal:8090/artifacts-service}
+      ARTIFACT_TENANT: ${ARTIFACT_TENANT:-Flipkart}
+      MEDIA_VERIFY_TLS: ${MEDIA_VERIFY_TLS:-true}
+    ports: ["8810:8810"]
+    depends_on:
+      db: {condition: service_healthy}
+    restart: unless-stopped
+volumes:
+  autoqc_pg:

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#16695e" />
+    <title>AutoQC · Benchmark workbench</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="#overview"
+        ><span class="brand-icon">Q</span
+        ><span>AutoQC<small>BENCHMARK WORKBENCH</small></span></a
+      >
+      <div class="nav-label">WORKSPACE</div>
+      <nav aria-label="Main navigation">
+        <a href="#overview" data-tab="overview"><span>◫</span> Overview</a>
+        <a href="#videos" data-tab="videos"><span>▷</span> Video library</a>
+        <a href="#testsets" data-tab="testsets"><span>▦</span> Testsets</a>
+        <a href="#modes" data-tab="modes"><span>◇</span> Model modes</a>
+        <a href="#benchmarks" data-tab="benchmarks"
+          ><span>↗</span> Benchmarks</a
+        >
+      </nav>
+      <div class="sidebar-footer">
+        <span class="dot"></span> Shared workspace
+        <small>Human labels. Reproducible runs.</small>
+        <a href="/docs" target="_blank" rel="noopener">API documentation ↗</a>
+        <a href="/api/export" download>Export all records ↓</a>
+      </div>
+    </aside>
+    <main>
+      <header class="topbar">
+        <span>Evaluation / <b id="breadcrumb">Overview</b></span
+        ><span class="workspace-chip">LIFESTYLE VIDEO QC</span>
+      </header>
+      <div id="content" aria-live="polite">
+        <div class="loading">Loading your workspace…</div>
+      </div>
+    </main>
+    <div id="toast" role="status"></div>
+    <dialog id="modal"><div id="modal-content"></div></dialog>
+  </body>
+</html>

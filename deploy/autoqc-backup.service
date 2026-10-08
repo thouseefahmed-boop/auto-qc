@@ -1,0 +1,10 @@
+[Unit]
+Description=AutoQC consistent PostgreSQL backup
+After=autoqc-db.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/autoqc
+ExecStart=%h/autoqc/.venv/bin/python %h/autoqc/deploy/backup.py
+UMask=0077
+

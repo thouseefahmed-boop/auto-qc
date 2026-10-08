@@ -1,0 +1,16 @@
+[Unit]
+Description=AutoQC FastAPI and shared UI
+After=network.target autoqc-db.service
+Requires=autoqc-db.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/autoqc
+EnvironmentFile=%h/autoqc/.env
+ExecStart=%h/autoqc/.venv/bin/python -m autoqc.serve
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=default.target
