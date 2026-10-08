@@ -28,6 +28,11 @@ THUMBNAIL_DB_PATH = Path(os.environ.get("REVIEW_THUMBNAIL_DB_PATH", str(ROOT / "
 ARTIFACTS_BASE = "http://rtx-1.dev.internal:8090/artifacts-service"
 THUMBNAIL_WORKFLOWS = {"Zeus-Lightning-lifestyle", "Zeus-Lightning-lifestyle-2"}
 LOCK = threading.Lock()
+_configured_decisions = tuple(
+    value.strip() for value in os.environ.get("REVIEW_DECISIONS", "approved,rejected").split(",")
+    if value.strip() and value.strip() not in {"unreviewed", "all"}
+)
+REVIEW_DECISIONS = ("unreviewed",) + _configured_decisions
 
 DATASETS = {
     "bad_product": {
@@ -68,6 +73,11 @@ DATASETS = {
 _ONLY_CATEGORY = os.environ.get("REVIEW_ONLY_CATEGORY", "").strip()
 if _ONLY_CATEGORY in DATASETS:
     DATASETS = {_ONLY_CATEGORY: DATASETS[_ONLY_CATEGORY]}
+_ONLY_CATEGORIES = {
+    value.strip() for value in os.environ.get("REVIEW_CATEGORIES", "").split(",") if value.strip()
+}
+if _ONLY_CATEGORIES:
+    DATASETS = {key: value for key, value in DATASETS.items() if key in _ONLY_CATEGORIES}
 
 
 def load_json(path: Path, default):
@@ -210,7 +220,7 @@ class ReviewHandler(SimpleHTTPRequestHandler):
             item_id = str(payload["item_id"])
             decision = str(payload["decision"])
             reviewer = ""
-            if decision not in {"approved", "rejected", "unreviewed"}:
+            if decision not in REVIEW_DECISIONS:
                 raise ValueError("invalid decision")
         except (KeyError, ValueError, json.JSONDecodeError):
             return self.json_response({"error": "Invalid review payload"}, HTTPStatus.BAD_REQUEST)
@@ -269,7 +279,7 @@ class ReviewHandler(SimpleHTTPRequestHandler):
             if search and search not in haystack:
                 continue
             items.append(item)
-        counts = {"all": 0, "unreviewed": 0, "approved": 0, "rejected": 0}
+        counts = {"all": 0, **{decision: 0 for decision in REVIEW_DECISIONS}}
         for item in build_items():
             if item["category"] == category:
                 counts["all"] += 1
@@ -282,7 +292,8 @@ class ReviewHandler(SimpleHTTPRequestHandler):
         except ValueError:
             return self.json_response({"error": "Invalid index"}, HTTPStatus.BAD_REQUEST)
         total = len(items)
-        page = items[index:index + 1] if category in {"bad_product", "bad_movement"} else items
+        paginate_all = os.environ.get("REVIEW_PAGINATE_ALL", "") == "1"
+        page = items[index:index + 1] if paginate_all or category in {"bad_product", "bad_movement"} else items
         self.json_response({"items": page, "counts": counts, "total": total})
 
     def get_merged_items(self, query):
@@ -295,7 +306,7 @@ class ReviewHandler(SimpleHTTPRequestHandler):
             return self.json_response({"error": "Invalid index"}, HTTPStatus.BAD_REQUEST)
         reviews = load_json(REVIEWS_PATH, {})
         local_items = []
-        local_counts = {"all": 0, "unreviewed": 0, "approved": 0, "rejected": 0}
+        local_counts = {"all": 0, **{decision: 0 for decision in REVIEW_DECISIONS}}
         for item in build_items():
             if item["category"] != category:
                 continue
