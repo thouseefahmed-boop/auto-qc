@@ -1,0 +1,67 @@
+@startuml
+title AutoQC — five tables
+hide circle
+skinparam linetype ortho
+skinparam backgroundColor #F5F6F8
+skinparam entityBackgroundColor #FFFFFF
+skinparam entityBorderColor #16695E
+entity generations {
+  * uuid : UUID <<PK>>
+  --
+  * artifact_id : UUID <<UNIQUE>>
+  * tags : JSONB
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+entity testsets {
+  * uuid : UUID <<PK>>
+  --
+  * name : TEXT
+  * query : JSONB
+  * items : JSONB (frozen membership + labels)
+  created_at : TIMESTAMPTZ
+}
+entity modes {
+  * uuid : UUID <<PK>>
+  --
+  * name : TEXT <<UNIQUE>>
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+entity recipes {
+  * uuid : UUID <<PK>>
+  --
+  * name : TEXT <<UNIQUE>>
+  * prompt : TEXT
+  label_definitions : JSONB
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+entity benchmarks {
+  * uuid : UUID <<PK>>
+  --
+  * mode_id : UUID <<FK>>
+  * testset_id : UUID <<FK>>
+  * recipe_id : UUID <<FK>>
+  * status : TEXT
+  predictions : JSONB
+  numbers : JSONB
+  config_snapshot : JSONB
+  worker_id : TEXT
+  lease_token : UUID
+  lease_expires_at : TIMESTAMPTZ
+  error : TEXT
+  created_at : TIMESTAMPTZ
+  started_at : TIMESTAMPTZ
+  finished_at : TIMESTAMPTZ
+}
+generations ..> testsets : selected and copied into items\n(application validation, not a JSON FK)
+testsets ||--o{ benchmarks
+modes ||--o{ benchmarks
+recipes ||--o{ benchmarks
+note bottom of testsets
+  Query = selection recipe
+  Items = exact videos and human labels
+  Frozen once created
+end note
+@enduml

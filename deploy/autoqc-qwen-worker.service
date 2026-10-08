@@ -1,0 +1,16 @@
+[Unit]
+Description=AutoQC Qwen video benchmark worker
+After=network.target autoqc-api.service
+Requires=autoqc-api.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/autoqc
+EnvironmentFile=%h/autoqc/.env
+ExecStart=%h/autoqc/.venv/bin/python worker_client.py --url http://127.0.0.1:8810 --adapter autoqc.model_worker:infer --models qwenllm2fps qwenA3b4fps --worker-id qwen-worker-1
+Restart=on-failure
+RestartSec=10
+UMask=0077
+
+[Install]
+WantedBy=default.target
