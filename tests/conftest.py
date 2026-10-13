@@ -20,6 +20,8 @@ def client():
     from autoqc.api import app
     from fastapi.testclient import TestClient
     try:
+        from autoqc.db import pool
+        assert schema in pool.conninfo, "Database was imported before the isolated test schema was configured"
         with TestClient(app) as c:
             yield c
     finally:
@@ -31,4 +33,3 @@ def client():
 @pytest.fixture
 def worker_headers():
     return {"Authorization": "Bearer test-worker-secret"}
-

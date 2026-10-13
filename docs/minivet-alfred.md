@@ -5,6 +5,11 @@ The benchmark path is AutoQC's authenticated pull worker → MiniVET Alfred
 database, artifact-service media URLs, worker leases and per-video result saves
 remain the benchmark source of truth. No second queue or blob store is needed.
 
+Users can also create named testsets from one or several uploaded videos.
+Uploads use the same private MiniVET artifact store and the existing benchmark
+worker protocol. The deployment image includes ffprobe for validating real video
+content; upload parsing is bounded to the configured per-file size.
+
 Install the optional integration from the repository root:
 
 ```sh
@@ -70,4 +75,3 @@ container, then register its health-checked service in the existing router.
 The UUID must be checked live before use. Point future AutoQC worker settings
 to the registered gateway route, retaining `Cosmos3-Super` as the served name.
 Existing frozen benchmark snapshots retain their original endpoint.
-

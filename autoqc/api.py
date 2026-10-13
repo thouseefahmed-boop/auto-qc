@@ -22,6 +22,7 @@ from .models import (LABELS, BenchmarkIn, ClaimIn, FailIn, GenerationIn, LeaseIn
                      ModeIn, Recipe, RecipePromptIn, ResultIn, ReviewIn, TestsetIn,
                      WorkerSettingsIn, set_for)
 from .selection import SelectionError, select_items
+from .uploads import router as upload_router
 
 
 DEFAULT_WORKER_SETTINGS = {
@@ -58,6 +59,7 @@ async def lifespan(app):
 
 
 app = FastAPI(title="AutoQC", version="0.1.0", lifespan=lifespan)
+app.include_router(upload_router)
 
 
 class SameOriginWrites(BaseHTTPMiddleware):
