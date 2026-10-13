@@ -1,5 +1,8 @@
 # AutoQC
 
+For the MiniVET Alfred/Cosmos 3 worker integration and rtx-3 deployment, see
+[docs/minivet-alfred.md](docs/minivet-alfred.md).
+
 A shared video benchmark workbench built with FastAPI, PostgreSQL, and a browser UI. Model workers are connected later; the app never invents predictions or benchmark scores.
 
 ## Running deployment

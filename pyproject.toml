@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "autoqc"
 version = "0.1.0"
-description = "Four-table video AutoQC benchmark workbench"
+description = "Video AutoQC benchmark workbench"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115,<1", "uvicorn>=0.30,<1", "psycopg[binary,pool]>=3.2,<4",
@@ -14,6 +14,9 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8,<10"]
+minivet = [
+  "alfred @ git+https://github.com/MinivetAI/minivet-architecture.git@bcc76349dad3b82fb8278be5c27ea72056576d0c#subdirectory=alfred_src"
+]
 
 [tool.setuptools.package-data]
 autoqc = ["schema.sql", "web/*"]

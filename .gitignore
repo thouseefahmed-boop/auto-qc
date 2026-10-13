@@ -7,4 +7,5 @@ data/
 backups/
 *.log
 .DS_Store
-
+_build/
+.minivet-runtime.json

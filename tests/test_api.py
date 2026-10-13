@@ -14,7 +14,7 @@ def test_application_tables(client):
     from autoqc.db import pool
     with pool.connection() as conn:
         names = {r["table_name"] for r in conn.execute("SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema()")}
-    assert names == {"generations", "testsets", "modes", "recipes", "benchmarks"}
+    assert names == {"generations", "testsets", "modes", "recipes", "benchmarks", "worker_settings"}
 
 
 def test_ui_and_docs(client):
@@ -54,7 +54,13 @@ def make_run(client):
     test = client.post("/api/testsets", json={"name": "Test run", "query": {"tags": [{"key": "adversarial", "value": "bad_movement", "count": 1}]}})
     assert test.status_code == 201, test.text
     test = test.json()
-    mode = client.post("/api/modes", json={"name": "test-" + uuid4().hex}).json()
+    mode = next((m for m in client.get("/api/modes").json() if m["name"] == "unit-test-model"), None)
+    if mode is None:
+        mode = client.post("/api/modes", json={"name": "unit-test-model"}).json()
+    settings = client.put("/api/worker-settings/" + mode["uuid"], json={
+        "endpoint": "http://model.test/cosmos", "served_model": "unit-test-model", "fps": 4,
+    })
+    assert settings.status_code == 200, settings.text
     recipe = client.post("/api/recipes", json={"name": "recipe-" + uuid4().hex, "prompt": "Return labels."}).json()
     result = client.post("/api/benchmarks", json={"mode_ids": [mode["uuid"]], "testset_id": test["uuid"], "recipe_id": recipe["uuid"]})
     assert result.status_code == 201, result.text
