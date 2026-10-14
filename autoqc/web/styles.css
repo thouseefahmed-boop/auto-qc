@@ -969,5 +969,8 @@ pre {
 .upload-file-heading { display: flex; justify-content: space-between; gap: 12px; }
 .upload-file-heading > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .upload-file-heading > span:last-child { flex-shrink: 0; }
+.source-image-picker { margin-top: 8px; padding: 12px; }
+.source-image-selection { margin: 7px 0 0; overflow-wrap: anywhere; }
+.required { color: var(--red); font-size: 11px; font-weight: 700; margin-left: 6px; }
 .upload-file progress { width: 100%; height: 8px; margin: 10px 0; accent-color: #16695e; }
 .upload-error { color: #ad302e; }

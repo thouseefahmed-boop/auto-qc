@@ -295,13 +295,16 @@ function uploadRequestId() {
 async function uploadTestset() {
   const limits = await api("/upload-limits");
   modal("Upload videos as a testset", `
-    <p>Choose one video or a batch, then give your testset a name.</p>
+    <p>Choose one video or a batch, then attach source images to each video.</p>
     <label for="upload-testset-name">Testset name</label>
     <input id="upload-testset-name" maxlength="160" placeholder="For example, Autumn product videos">
+    <label for="upload-visibility">Storage visibility</label>
+    <select id="upload-visibility"><option value="PRIVATE" selected>Private</option><option value="PUBLIC">Public</option></select>
+    <p class="field-help">Choose whether uploaded videos and their source images are stored privately or publicly.</p>
     <label for="upload-videos">Videos</label>
     <div class="upload-picker"><input id="upload-videos" type="file" multiple accept="${limits.extensions.join(",")}"><p class="field-help">MP4, MOV, or WebM · up to ${limits.max_files} videos · ${Math.round(limits.max_bytes / 1024 / 1024)} MB each</p></div>
     <div id="upload-list" class="upload-list"></div>
-    <p id="upload-summary" class="field-help" role="status" aria-live="polite">No videos selected.</p>
+    <p id="upload-summary" class="field-help" role="status" aria-live="polite">Choose videos, then attach at least one source image to every video.</p>
     <div class="notice"><span>▷</span><div><b>Ready for QC as soon as you save.</b>New videos start with unreviewed labels. Review them in the Video library when you want to compare predictions with human judgments.</div></div>`,
     '<button data-action="close">Cancel</button><button class="primary" data-action="save-upload-testset">Upload & save testset</button>');
   state.upload = { limits, entries: [], busy: false, requestId: uploadRequestId() };
@@ -310,9 +313,13 @@ function renderUploadList() {
   const upload = state.upload;
   $("#upload-list").innerHTML = upload.entries.map((entry, index) => `
     <div class="upload-file"><div class="upload-file-heading"><span title="${esc(entry.file.name)}">${esc(entry.file.name)}</span><span class="tiny muted">${(entry.file.size / 1024 / 1024).toFixed(1)} MB</span></div>
+    <label for="source-images-${index}">Source images for this video <span class="required">Required</span></label>
+    <div class="upload-picker source-image-picker"><input id="source-images-${index}" data-source-images="${index}" type="file" multiple accept="${upload.limits.image_extensions.join(",")}"><p class="field-help">JPEG, PNG, or WebP · 1–${upload.limits.max_source_images} images · ${Math.round(upload.limits.max_image_bytes / 1024 / 1024)} MB each · ${Math.round(upload.limits.max_source_images_bytes / 1024 / 1024)} MB total</p></div>
+    <p class="field-help source-image-selection">${entry.sourceFiles.length ? `${entry.sourceFiles.length} image${entry.sourceFiles.length === 1 ? "" : "s"} selected: ${entry.sourceFiles.map(file => esc(file.name)).join(", ")}` : "No source images selected."}</p>
     <progress id="upload-progress-${index}" max="100" value="${entry.progress}" aria-label="Upload progress for ${esc(entry.file.name)}"></progress>
     <div class="upload-file-heading"><div id="upload-status-${index}" class="tiny ${entry.error ? "upload-error" : "muted"}">${esc(entry.status)}</div><button class="small-btn" data-action="remove-upload-video" data-index="${index}" ${upload.busy ? "disabled" : ""} aria-label="Remove ${esc(entry.file.name)}">Remove</button></div></div>`).join("");
-  $("#upload-summary").textContent = `${upload.entries.length} video${upload.entries.length === 1 ? "" : "s"} selected. Identical videos are included once.`;
+  const missing = upload.entries.filter(entry => !entry.sourceFiles.length && !entry.generationId).length;
+  $("#upload-summary").textContent = `${upload.entries.length} video${upload.entries.length === 1 ? "" : "s"} selected · ${missing} still need source images. Each video keeps its own images.`;
 }
 function sendVideo(entry, index) {
   return new Promise((resolve, reject) => {
@@ -336,6 +343,8 @@ function sendVideo(entry, index) {
     xhr.ontimeout = () => reject(new Error("This upload timed out. Please retry; completed uploads are retained."));
     const body = new FormData();
     body.append("file", entry.file);
+    entry.sourceFiles.forEach(file => body.append("source_images", file));
+    body.append("visibility", formValue("upload-visibility") || "PRIVATE");
     xhr.send(body);
   });
 }
@@ -345,6 +354,11 @@ async function saveUploadTestset() {
   const name = formValue("upload-testset-name").trim();
   if (!name) { formError(new Error("Enter a testset name.")); $("#upload-testset-name").focus(); return; }
   if (!upload.entries.length) { formError(new Error("Choose at least one video.")); return; }
+  const missingImages = upload.entries.filter(entry => !entry.sourceFiles.length && !entry.generationId);
+  if (missingImages.length) {
+    formError(new Error(`Attach at least one source image to each video. ${missingImages.length} video${missingImages.length === 1 ? " is" : "s are"} missing images.`));
+    return;
+  }
   upload.busy = true;
   $("#form-error").textContent = "";
   $("#modal").querySelectorAll("button,input").forEach(element => { element.disabled = true; });
@@ -352,7 +366,7 @@ async function saveUploadTestset() {
     for (let index = 0; index < upload.entries.length; index++) {
       const entry = upload.entries[index];
       if (entry.generationId) continue;
-      entry.error = false; entry.status = "Uploading…"; renderUploadList();
+      entry.error = false; entry.status = `Uploading video and ${entry.sourceFiles.length} source image${entry.sourceFiles.length === 1 ? "" : "s"}…`; renderUploadList();
       try {
         const saved = await sendVideo(entry, index);
         entry.generationId = saved.uuid; entry.progress = 100; entry.status = "Uploaded";
@@ -378,7 +392,26 @@ async function saveUploadTestset() {
   }
 }
 document.addEventListener("change", event => {
-  if (event.target.id !== "upload-videos" || !state.upload || state.upload.busy) return;
+  if (!state.upload || state.upload.busy) return;
+  if (event.target.matches("[data-source-images]")) {
+    const index = Number(event.target.dataset.sourceImages);
+    const entry = state.upload.entries[index];
+    if (!entry) return;
+    const files = [...event.target.files];
+    const limits = state.upload.limits;
+    const valid = files.length <= limits.max_source_images && files.every(file => file.size > 0 && file.size <= limits.max_image_bytes &&
+      limits.image_extensions.some(extension => file.name.toLowerCase().endsWith(extension)));
+    const total = files.reduce((sum, file) => sum + file.size, 0);
+    if (!valid || total > limits.max_source_images_bytes) {
+      event.target.value = "";
+      formError(new Error(`Choose up to ${limits.max_source_images} non-empty JPEG, PNG, or WebP images per video, no larger than ${Math.round(limits.max_image_bytes / 1024 / 1024)} MB each and ${Math.round(limits.max_source_images_bytes / 1024 / 1024)} MB total.`));
+      return;
+    }
+    entry.sourceFiles = files;
+    $("#form-error").textContent = ""; renderUploadList();
+    return;
+  }
+  if (event.target.id !== "upload-videos") return;
   const files = [...event.target.files];
   const limits = state.upload.limits;
   if (files.length > limits.max_files || files.some(file => !file.size || file.size > limits.max_bytes ||
@@ -387,7 +420,7 @@ document.addEventListener("change", event => {
     formError(new Error(`Choose up to ${limits.max_files} non-empty MP4, MOV, or WebM videos, no larger than ${Math.round(limits.max_bytes / 1024 / 1024)} MB each.`));
     return;
   }
-  state.upload.entries = files.map(file => ({file, progress: 0, status: "Ready to upload"}));
+  state.upload.entries = files.map(file => ({file, sourceFiles: [], progress: 0, status: "Attach source images"}));
   $("#form-error").textContent = ""; renderUploadList();
 });
 

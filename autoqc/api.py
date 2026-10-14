@@ -10,6 +10,7 @@ import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
+from starlette.responses import Response
 from fastapi.staticfiles import StaticFiles
 from psycopg.errors import UniqueViolation
 from psycopg.types.json import Jsonb
@@ -497,6 +498,38 @@ def media(artifact_id: UUID, request: Request):
         if not conn.execute("SELECT 1 FROM generations WHERE artifact_id=%s", (artifact_id,)).fetchone():
             raise HTTPException(404, "Unknown artifact")
     return stream_video(artifact_id, request)
+
+
+@app.get("/api/images/{artifact_id}")
+def source_image(artifact_id: UUID):
+    with pool.connection() as conn:
+        attached = conn.execute("""SELECT 1 FROM generations g
+            CROSS JOIN LATERAL jsonb_array_elements(
+                CASE WHEN jsonb_typeof(g.tags #> '{metadata,source_images}')='array'
+                     THEN g.tags #> '{metadata,source_images}' ELSE '[]'::jsonb END
+            ) AS source_image(item)
+            WHERE source_image.item->>'artifact_id'=%s LIMIT 1""", (str(artifact_id),)).fetchone()
+        if not attached:
+            raise HTTPException(404, "Source image not found")
+    base = os.getenv("ARTIFACTS_BASE", "http://rtx-1.dev.internal:8090/artifacts-service").rstrip("/")
+    try:
+        resolved = httpx.get(f"{base}/internal/artifacts/{artifact_id}/download",
+                             params={"tenant_id": os.getenv("ARTIFACT_TENANT", "Flipkart"),
+                                     "delivery_mode": "presigned"}, timeout=20)
+        resolved.raise_for_status()
+        url = resolved.json()["download_url"]
+        with httpx.Client(follow_redirects=True, timeout=60) as client:
+            upstream = client.get(url)
+            upstream.raise_for_status()
+        content_type = upstream.headers.get("content-type", "").split(";", 1)[0].lower()
+        if content_type not in {"image/jpeg", "image/png", "image/webp"}:
+            raise ValueError("Artifact is not a supported image")
+        if len(upstream.content) > 25 * 1024 * 1024:
+            raise ValueError("Source image exceeds the serving limit")
+    except (httpx.HTTPError, ValueError, KeyError) as exc:
+        raise HTTPException(502, "Source image storage could not serve this image") from exc
+    return Response(upstream.content, media_type=content_type,
+                    headers={"Cache-Control": "private, max-age=60", "X-Content-Type-Options": "nosniff"})
 
 
 app.mount("/", StaticFiles(directory=Path(__file__).parent / "web", html=True), name="ui")
