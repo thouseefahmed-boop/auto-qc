@@ -1,5 +1,5 @@
 from typing import Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, StrictBool, model_validator
 
@@ -64,6 +64,12 @@ class Recipe(StrictModel):
 class TestsetIn(StrictModel):
     name: str = Field(min_length=1, max_length=160)
     query: Recipe
+
+
+class VideoTestsetIn(StrictModel):
+    name: str = Field(min_length=1, max_length=160)
+    generation_ids: list[UUID] = Field(min_length=1, max_length=100)
+    request_id: UUID = Field(default_factory=uuid4)
 
 
 class ModeIn(StrictModel):

@@ -1,6 +1,25 @@
 # AutoQC
 
+For the MiniVET Alfred/Cosmos 3 worker integration and rtx-3 deployment, see
+[docs/minivet-alfred.md](docs/minivet-alfred.md).
+
 A shared video benchmark workbench built with FastAPI, PostgreSQL, and a browser UI. Model workers are connected later; the app never invents predictions or benchmark scores.
+
+## Upload a video testset
+
+Open **Testsets → Upload videos**, enter a name, and select one or several videos.
+MP4, MOV, and WebM are supported, up to 100 videos per set and 500 MB per video.
+Each file shows upload progress. Save creates a frozen testset containing the
+unique uploaded videos, available immediately in Benchmarks and the Video library.
+New uploads have unknown human labels; they are not automatically classified as
+normal. You can run QC immediately, then review labels in the library when building
+an accuracy comparison. Identical files reuse the existing video and preserve any
+previous review. Retry resumes completed uploads rather than storing them twice.
+
+Videos are validated with `ffprobe` and stored privately in MiniVET's artifact
+service. The Docker images include the validator. Non-Docker deployments require
+`ffmpeg`/`ffprobe` on the host. `AUTOQC_UPLOAD_MAX_BYTES` can override the per-video
+size limit; the upload dialog reads the active limit from the API.
 
 ## Running deployment
 
